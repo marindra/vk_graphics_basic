@@ -219,6 +219,7 @@ void SimpleCompute::Execute()
   fenceCreateInfo.flags = 0;
   VK_CHECK_RESULT(vkCreateFence(m_device, &fenceCreateInfo, NULL, &m_fence));
 
+  std::vector<float> answers(m_length);
   auto start_time = std::chrono::steady_clock::now();
 
   // Отправляем буфер команд на выполнение
@@ -227,7 +228,7 @@ void SimpleCompute::Execute()
   //Ждём конца выполнения команд
   VK_CHECK_RESULT(vkWaitForFences(m_device, 1, &m_fence, VK_TRUE, 100000000000));
 
-  std::vector<float> answers(m_length);
+//  std::vector<float> answers(m_length);
 
   float gpu_answer = 0.0f;
   m_pCopyHelper->ReadBuffer(m_answ, 0, answers.data(), sizeof(float) * values.size());
