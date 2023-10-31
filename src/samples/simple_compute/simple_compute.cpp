@@ -4,6 +4,8 @@
 #include <vk_buffers.h>
 #include <vk_utils.h>
 
+#include <chrono>
+
 SimpleCompute::SimpleCompute(uint32_t a_length) : m_length(a_length)
 {
 #ifdef NDEBUG
@@ -81,9 +83,9 @@ void SimpleCompute::SetupSimplePipeline()
                                                                        VK_BUFFER_USAGE_TRANSFER_DST_BIT);
   m_B = vk_utils::createBuffer(m_device, sizeof(float) * m_length, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                                                                        VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-  m_sum = vk_utils::createBuffer(m_device, sizeof(float) * m_length, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+  m_answ = vk_utils::createBuffer(m_device, sizeof(float) * m_length, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                                                                        VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-  vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice, {m_A, m_B, m_sum}, 0);
+  vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice, {m_A, m_B, m_answ}, 0);
 
   m_pBindings = std::make_shared<vk_utils::DescriptorMaker>(m_device, dtypes, 1);
 
@@ -91,18 +93,18 @@ void SimpleCompute::SetupSimplePipeline()
   m_pBindings->BindBegin(VK_SHADER_STAGE_COMPUTE_BIT);
   m_pBindings->BindBuffer(0, m_A);
   m_pBindings->BindBuffer(1, m_B);
-  m_pBindings->BindBuffer(2, m_sum);
+  m_pBindings->BindBuffer(2, m_answ);
   m_pBindings->BindEnd(&m_sumDS, &m_sumDSLayout);
 
   // Заполнение буферов
-  std::vector<float> values(m_length);
-  for (uint32_t i = 0; i < values.size(); ++i) {
-    values[i] = (float)i;
+  values.resize(m_length);
+  for (uint32_t i = 0; i < m_length; ++i) {
+    values[i] = (float) rand() / RAND_MAX * 128.0f;
   }
   m_pCopyHelper->UpdateBuffer(m_A, 0, values.data(), sizeof(float) * values.size());
-  for (uint32_t i = 0; i < values.size(); ++i) {
-    values[i] = (float)i * i;
-  }
+//  for (uint32_t i = 0; i < values.size(); ++i) {
+//    values[i] = (float)i * i;
+//  }
   m_pCopyHelper->UpdateBuffer(m_B, 0, values.data(), sizeof(float) * values.size());
 }
 
@@ -122,7 +124,7 @@ void SimpleCompute::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkPipeli
 
   vkCmdPushConstants(a_cmdBuff, m_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(m_length), &m_length);
 
-  vkCmdDispatch(a_cmdBuff, 1, 1, 1);
+  vkCmdDispatch(a_cmdBuff, (m_length - 1) / 1024 + 1, 1, 1);
 
   VK_CHECK_RESULT(vkEndCommandBuffer(a_cmdBuff));
 }
@@ -137,7 +139,7 @@ void SimpleCompute::CleanupPipeline()
 
   vkDestroyBuffer(m_device, m_A, nullptr);
   vkDestroyBuffer(m_device, m_B, nullptr);
-  vkDestroyBuffer(m_device, m_sum, nullptr);
+  vkDestroyBuffer(m_device, m_answ, nullptr);
 
   vkDestroyPipelineLayout(m_device, m_layout, nullptr);
   vkDestroyPipeline(m_device, m_pipeline, nullptr);
@@ -217,15 +219,60 @@ void SimpleCompute::Execute()
   fenceCreateInfo.flags = 0;
   VK_CHECK_RESULT(vkCreateFence(m_device, &fenceCreateInfo, NULL, &m_fence));
 
+  auto start_time = std::chrono::steady_clock::now();
+
   // Отправляем буфер команд на выполнение
   VK_CHECK_RESULT(vkQueueSubmit(m_computeQueue, 1, &submitInfo, m_fence));
 
   //Ждём конца выполнения команд
   VK_CHECK_RESULT(vkWaitForFences(m_device, 1, &m_fence, VK_TRUE, 100000000000));
 
-  std::vector<float> values(m_length);
-  m_pCopyHelper->ReadBuffer(m_sum, 0, values.data(), sizeof(float) * values.size());
-  for (auto v: values) {
-    std::cout << v << ' ';
+  std::vector<float> answers(m_length);
+
+  float gpu_answer = 0.0f;
+  m_pCopyHelper->ReadBuffer(m_answ, 0, answers.data(), sizeof(float) * values.size());
+
+  auto end_time           = std::chrono::steady_clock::now();
+//  auto elapsed_ms_for_gpu = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+
+  for (auto v : values)
+  {
+    gpu_answer += v;
   }
+
+  auto end_time_with_sum           = std::chrono::steady_clock::now();
+  auto elapsed_ms_for_gpu          = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+  auto elapsed_ms_for_gpu_with_sum = std::chrono::duration_cast<std::chrono::milliseconds>(end_time_with_sum - start_time);
+
+  std::cout << std::endl << "Answer from GPU: " << gpu_answer << std::endl;
+  std::cout << "Time on GPU (ms): " << elapsed_ms_for_gpu.count() << std::endl;
+  std::cout << "Time on GPU with summation on CPU (ms): " << elapsed_ms_for_gpu_with_sum.count() << std::endl;
+
+  start_time = std::chrono::steady_clock::now();
+  for (int i = 0; i < values.size(); ++i) {
+    int minShift = std::max(-3, -i);
+    int maxShift = std::min(3, (int)values.size() - i - 1);
+    float curAnsw = 0.0f;
+    float scaler  = 1.0 / 7.0f;
+    for (int j = minShift; j <= maxShift; ++j) {
+      curAnsw += values[i + j] * scaler;
+    }
+    answers[i] = values[i] - curAnsw;
+  }
+
+  end_time                = std::chrono::steady_clock::now();
+//  auto elapsed_ms_for_cpu = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+
+  float cpu_answer = 0.0f;
+  for (auto v : values)
+  {
+    cpu_answer += v;
+  }
+  end_time_with_sum                = std::chrono::steady_clock::now();
+  auto elapsed_ms_for_cpu = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+  auto elapsed_ms_for_cpu_with_sum = std::chrono::duration_cast<std::chrono::milliseconds>(end_time_with_sum - start_time);
+  std::cout << std::endl
+            << "Answer from CPU: " << cpu_answer << std::endl;
+  std::cout << "Time on CPU (ms): " << elapsed_ms_for_cpu.count() << std::endl;
+  std::cout << "Time on CPU with summation on CPU (ms): " << elapsed_ms_for_cpu_with_sum.count() << std::endl;
 }
