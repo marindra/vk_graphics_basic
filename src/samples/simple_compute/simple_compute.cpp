@@ -235,7 +235,7 @@ void SimpleCompute::Execute()
   auto end_time           = std::chrono::steady_clock::now();
 //  auto elapsed_ms_for_gpu = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
-  for (auto v : values)
+  for (auto v : answers)
   {
     gpu_answer += v;
   }
@@ -249,6 +249,8 @@ void SimpleCompute::Execute()
   std::cout << "Time on GPU with summation on CPU (ms): " << elapsed_ms_for_gpu_with_sum.count() << std::endl;
 
   start_time = std::chrono::steady_clock::now();
+
+  // initialization - in SetupSimplePipeline()
   for (int i = 0; i < values.size(); ++i) {
     int minShift = std::max(-3, -i);
     int maxShift = std::min(3, (int)values.size() - i - 1);
@@ -264,7 +266,7 @@ void SimpleCompute::Execute()
 //  auto elapsed_ms_for_cpu = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
   float cpu_answer = 0.0f;
-  for (auto v : values)
+  for (auto v : answers)
   {
     cpu_answer += v;
   }
