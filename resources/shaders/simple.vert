@@ -31,10 +31,12 @@ void main(void)
     const vec4 wNorm = vec4(DecodeNormal(floatBitsToInt(vPosNorm.w)),         0.0f);
     const vec4 wTang = vec4(DecodeNormal(floatBitsToInt(vTexCoordAndTang.z)), 0.0f);
 
-    mat4 scaledModel = params.mModel * mat4(0.1f + 0.5f * abs(0.5f + sin(params.livingTime)), 0.0f, 0.0f, 0.0f, 0.0f, 0.3f + 1.5f * abs(cos(params.livingTime)), 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+    mat4 scaledModel = params.mModel * mat4(1.0f + 0.1f * abs(sin(0.5f * params.livingTime)), 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
 
     vOut.wPos     = (scaledModel * vec4(vPosNorm.xyz, 1.0f)).xyz;
     vOut.wPos.y += 0.5f * sin(params.livingTime);
+    vOut.wPos.z -= 1.0f;
+    vOut.wPos.z -= cos(0.25f * params.livingTime);
 
     vOut.wNorm    = normalize(mat3(transpose(inverse(params.mModel))) * wNorm.xyz);
     vOut.wTangent = normalize(mat3(transpose(inverse(params.mModel))) * wTang.xyz);
