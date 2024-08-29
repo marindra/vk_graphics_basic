@@ -43,11 +43,12 @@ void main()
   float cosinusForInternalAngle = cos(Params.insideAngleParam);
   float cosinusForExternalAngle = cos(Params.outsideAngleParam);
 
+  float scaler = 1.0f;
+
   if (cosinusForInternalAngle > cosinusForExternalAngle)
   {
-    float scaler = 1.0f - (angleCosinus - cosinusForInternalAngle) / (cosinusForExternalAngle - cosinusForInternalAngle);
+    scaler -= (angleCosinus - cosinusForInternalAngle) / (cosinusForExternalAngle - cosinusForInternalAngle);
     scaler = scaler > 1.0f ? 1.0f : (scaler < 0.0f ? 0.0f : scaler);
-    shadow *= scaler;
     lightColor *= lightColor1;
   }
   else
@@ -57,5 +58,5 @@ void main()
     lightColor *= dark_violet;
   }
 
-  out_fragColor   = (lightColor*shadow + vec4(0.1f)) * vec4(Params.baseColor, 1.0f);
+  out_fragColor   = scaler * (lightColor*shadow + vec4(0.1f)) * vec4(Params.baseColor, 1.0f);
 }
