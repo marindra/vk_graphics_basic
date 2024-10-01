@@ -1,0 +1,154 @@
+#version 450
+
+layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+
+layout(binding = 0, rgba32f) uniform readonly image2D shadowMap;
+layout(binding = 1, rgba32f) uniform writeonly image2D shadowMapSmoothed;
+
+shared vec2[32 + 2*7][32 + 2*7] partOfImage;
+const int HalfOfWindow = 7; // window size is 15. Be careful! It's need to be checked by youself! Also check size of arrays "partOfImage" and "coef"
+const int WorkGroupSize = 32;
+
+const float coef[2*7+1] = {
+					0.008846949,0.018215908,0.033562396,0.055335034,0.08163802,
+					0.10777792, 0.12732458, 0.13459834, 0.12732458, 0.10777792,
+					0.08163802, 0.055335034,0.033562396,0.018215908,0.008846949};
+
+void main()
+{
+  const ivec2 localCoord = ivec2(gl_LocalInvocationID.xy);
+  const ivec2 globalCoord = ivec2(gl_GlobalInvocationID.xy);
+
+  const ivec2 sizeOfImage = imageSize(shadowMap);
+  if (globalCoord.x > sizeOfImage.x || globalCoord.y > sizeOfImage.y)
+  {
+    return;
+  }
+
+  ivec2 shiftedLocalCoords = localCoord + ivec2(HalfOfWindow);
+  partOfImage[shiftedLocalCoords.x][shiftedLocalCoords.y] = imageLoad(shadowMap, globalCoord).rg;
+
+  // Now I need to fill pieces from the edges of array by zeroes or fragments of texture
+  if (localCoord.x < HalfOfWindow && localCoord.y < HalfOfWindow)
+  {
+	// left top
+	shiftedLocalCoords = localCoord; // localCoord + ivec2(HalfOfWindow) - ivec2(HalfOfWindow)
+	if (globalCoord.x < HalfOfWindow || globalCoord.y < HalfOfWindow)
+	{
+	  // there no texture so I fill by zero
+	  partOfImage[shiftedLocalCoords.x][shiftedLocalCoords.y] = vec2(0.0);
+	} else {
+	  // I have this fragment
+	  partOfImage[shiftedLocalCoords.x][shiftedLocalCoords.y] = imageLoad(shadowMap, globalCoord - ivec2(HalfOfWindow)).rg;
+	}
+  }
+  else if (localCoord.x >= WorkGroupSize - HalfOfWindow && localCoord.y > WorkGroupSize - HalfOfWindow)
+  {
+	// right bottom
+	shiftedLocalCoords = localCoord + ivec2(2*HalfOfWindow); // localCoord + ivec2(HalfOfWindow) + ivec2(HalfOfWindow)
+	if (globalCoord.x >= sizeOfImage.x - HalfOfWindow || globalCoord.y >= sizeOfImage.y - HalfOfWindow)
+	{
+	  partOfImage[shiftedLocalCoords.x][shiftedLocalCoords.y] = vec2(0.0);
+	} else {
+	  partOfImage[shiftedLocalCoords.x][shiftedLocalCoords.y] = imageLoad(shadowMap, globalCoord + ivec2(HalfOfWindow)).rg;
+	}
+  }
+  else if (localCoord.x >= WorkGroupSize - HalfOfWindow && localCoord.y < HalfOfWindow)
+  {
+    // right top
+	shiftedLocalCoords = localCoord + ivec2(2*HalfOfWindow, 0); // localCoord + ivec2(HalfOfWindow) + ivec2(HalfOfWindow, -HalfOfWindow)
+	if (globalCoord.x >= sizeOfImage.x - HalfOfWindow || globalCoord.y < HalfOfWindow)
+	{
+	  partOfImage[shiftedLocalCoords.x][shiftedLocalCoords.y] = vec2(0.0);
+	} else {
+	  partOfImage[shiftedLocalCoords.x][shiftedLocalCoords.y] = imageLoad(shadowMap, globalCoord + ivec2(HalfOfWindow, -HalfOfWindow)).rg;
+	}
+  }
+  else if (localCoord.x < HalfOfWindow && localCoord.y >= WorkGroupSize - HalfOfWindow)
+  {
+    // left bottom
+	shiftedLocalCoords = localCoord + ivec2(0, 2*HalfOfWindow); // localCoord + ivec2(HalfOfWindow) + ivec2(-HalfOfWindow, HalfOfWindow)
+	if (globalCoord.x < HalfOfWindow || globalCoord.y >= sizeOfImage.y - HalfOfWindow)
+	{
+	  partOfImage[shiftedLocalCoords.x][shiftedLocalCoords.y] = vec2(0.0);
+	} else {
+	  partOfImage[shiftedLocalCoords.x][shiftedLocalCoords.y] = imageLoad(shadowMap, globalCoord + ivec2(-HalfOfWindow, HalfOfWindow)).rg;
+	}
+  }
+
+  // now I must process top, bottom, left and right
+  if (localCoord.x < HalfOfWindow)
+  {
+	// left
+	shiftedLocalCoords = localCoord + ivec2(0, HalfOfWindow); // localCoord + ivec2(HalfOfWindow) - ivec2(HalfOfWindow, 0)
+	if (globalCoord.x < HalfOfWindow)
+	{
+	  partOfImage[shiftedLocalCoords.x][shiftedLocalCoords.y] = vec2(0.0);
+	} else {
+	  partOfImage[shiftedLocalCoords.x][shiftedLocalCoords.y] = imageLoad(shadowMap, globalCoord - ivec2(HalfOfWindow, 0)).rg;
+	}
+  }
+  else if (localCoord.x >= WorkGroupSize - HalfOfWindow)
+  {
+	// right
+	shiftedLocalCoords = localCoord + ivec2(2 * HalfOfWindow, HalfOfWindow); // localCoord + ivec2(HalfOfWindow) + ivec2(HalfOfWindow, 0)
+	if (globalCoord.x >= sizeOfImage.x - HalfOfWindow)
+	{
+	  partOfImage[shiftedLocalCoords.x][shiftedLocalCoords.y] = vec2(0.0);
+	} else {
+	  partOfImage[shiftedLocalCoords.x][shiftedLocalCoords.y] = imageLoad(shadowMap, globalCoord + ivec2(HalfOfWindow, 0)).rg;
+	}
+  }
+
+  if (localCoord.y < HalfOfWindow)
+  {
+	// top
+	shiftedLocalCoords = localCoord + ivec2(HalfOfWindow, 0); // localCoord + ivec2(HalfOfWindow) - ivec2(0, HalfOfWindow)
+	if (globalCoord.y < HalfOfWindow)
+	{
+	  partOfImage[shiftedLocalCoords.x][shiftedLocalCoords.y] = vec2(0.0);
+	} else {
+	  partOfImage[shiftedLocalCoords.x][shiftedLocalCoords.y] = imageLoad(shadowMap, globalCoord - ivec2(0, HalfOfWindow)).rg;
+	}
+  }
+  else if (localCoord.y >= WorkGroupSize - HalfOfWindow)
+  {
+	// right
+	shiftedLocalCoords = localCoord + ivec2(HalfOfWindow, 2 * HalfOfWindow); // localCoord + ivec2(HalfOfWindow) + ivec2(0, HalfOfWindow)
+	if (globalCoord.y >= sizeOfImage.y - HalfOfWindow)
+	{
+	  partOfImage[shiftedLocalCoords.x][shiftedLocalCoords.y] = vec2(0.0);
+	} else {
+	  partOfImage[shiftedLocalCoords.x][shiftedLocalCoords.y] = imageLoad(shadowMap, globalCoord + ivec2(0, HalfOfWindow)).rg;
+	}
+  }
+
+  barrier();
+
+  // now I need to filter by x axis
+  shiftedLocalCoords = localCoord + ivec2(HalfOfWindow);
+  vec2 totalSum = vec2(0.0);
+  for (int i = -HalfOfWindow; i <= HalfOfWindow; ++i)
+  {
+	totalSum += coef[HalfOfWindow + i] * partOfImage[shiftedLocalCoords.x + i][shiftedLocalCoords.y];
+  }
+
+  barrier();
+
+  // now I need to save blurred result
+  partOfImage[shiftedLocalCoords.x][shiftedLocalCoords.y] = totalSum;
+
+  barrier();
+
+  // blur by y axis
+  totalSum = vec2(0.0);
+  for (int i = -HalfOfWindow; i <= HalfOfWindow; ++i)
+  {
+	totalSum += coef[HalfOfWindow + i] * partOfImage[shiftedLocalCoords.x][shiftedLocalCoords.y + i];
+  }
+
+  barrier();
+
+  //and save and store all
+  imageStore(shadowMapSmoothed, globalCoord, vec4(totalSum.x, totalSum.y, 0.0f, 0.0f));
+}

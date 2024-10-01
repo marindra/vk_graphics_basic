@@ -47,6 +47,8 @@ private:
   etna::GlobalContext* m_context;
   etna::Image mainViewDepth;
   etna::Image shadowMap;
+  etna::Image varianceShadowMap;
+  etna::Image blurredVSM;
   etna::Sampler defaultSampler;
   etna::Buffer constants;
 
@@ -72,11 +74,16 @@ private:
   float4x4 m_worldViewProj;
   float4x4 m_lightMatrix;    
 
+  bool useVSM = false;
+
   UniformParams m_uniforms {};
   void* m_uboMappedMem = nullptr;
 
   etna::GraphicsPipeline m_basicForwardPipeline {};
   etna::GraphicsPipeline m_shadowPipeline {};
+  etna::GraphicsPipeline m_varianceShadowPipeline {};
+  etna::GraphicsPipeline m_VSM_shortCodePipeline {}; // such name just due to length of shader code
+  etna::ComputePipeline m_blurredShadowPipeline {};
   
   VkSurfaceKHR m_surface = VK_NULL_HANDLE;
   VulkanSwapChain m_swapchain;
@@ -127,6 +134,7 @@ private:
   void DrawFrameSimple(bool draw_gui);
 
   void BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkImage a_targetImage, VkImageView a_targetImageView);
+  void BuildCommandBufferVSM(VkCommandBuffer a_cmdBuff, VkImage a_targetImage, VkImageView a_targetImageView);
 
   void DrawSceneCmd(VkCommandBuffer a_cmdBuff, const float4x4& a_wvp, VkPipelineLayout a_pipelineLayout = VK_NULL_HANDLE);
 
