@@ -25,7 +25,7 @@ struct SceneManager
     bool debug = false);
   ~SceneManager() { DestroyScene(); }
 
-  bool LoadSceneXML(const std::string &scenePath, bool transpose = true);
+  bool LoadSceneAndSurface(const std::string &scenePath, uint resolution1D, bool transpose = true);
   void LoadSingleTriangle();
 
   uint32_t AddMeshFromFile(const std::string& meshPath);

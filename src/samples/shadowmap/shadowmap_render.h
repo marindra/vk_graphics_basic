@@ -63,10 +63,20 @@ private:
   std::vector<VkFence> m_frameFences;
   std::vector<VkCommandBuffer> m_cmdBuffersDrawMain;
 
+  struct NoisedSurfaceParams
+  {
+    float minHeight = 0.0f;
+    float maxHeight = 0.07f;
+    float gap       = 1.0f; // usually it is equal to 1.0f / (resolution1D - 1)
+  };
+
+  const uint resolution1D = 1025; // count of vertices on one side
+
   struct
   {
     float4x4 projView;
     float4x4 model;
+    NoisedSurfaceParams surfaceParams;
   } pushConst2M;
 
   float4x4 m_worldViewProj;

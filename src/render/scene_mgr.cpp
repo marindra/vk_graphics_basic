@@ -32,34 +32,118 @@ SceneManager::SceneManager(VkDevice a_device, VkPhysicalDevice a_physDevice,
 
 }
 
-bool SceneManager::LoadSceneXML(const std::string &scenePath, bool transpose)
+void addVec2(std::vector<float> &vec, float a = 0, float b = 0)
+{
+  vec.push_back(a);
+  vec.push_back(b);
+}
+
+void addVec3(std::vector<uint32_t> &vec, uint32_t a = 0, uint32_t b = 0, uint32_t c = 0)
+{
+  vec.push_back(a);
+  vec.push_back(b);
+  vec.push_back(c);
+}
+
+void addVec4(std::vector<float> &vec, float a = 0, float b = 0, float c = 0, float d = 0)
+{
+  vec.push_back(a);
+  vec.push_back(b);
+  vec.push_back(c);
+  vec.push_back(d);
+}
+
+bool SceneManager::LoadSceneAndSurface(const std::string &scenePath, uint resolution1D, bool transpose)
 {
   auto hscene_main = std::make_shared<hydra_xml::HydraScene>();
   auto res         = hscene_main->LoadState(scenePath);
 
   if(res < 0)
   {
-    RUN_TIME_ERROR("LoadSceneXML error");
+    RUN_TIME_ERROR("LoadSceneAndSurface error");
     return false;
   }
 
-  for(auto loc : hscene_main->MeshFiles())
-  {
-    auto meshId    = AddMeshFromFile(loc);
-    auto instances = hscene_main->GetAllInstancesOfMeshLoc(loc); 
-    for(size_t j = 0; j < instances.size(); ++j)
-    {
-      if(transpose)
-        InstanceMesh(meshId, LiteMath::transpose(instances[j]));
-      else
-        InstanceMesh(meshId, instances[j]);
-    }
-  }
+  //for(auto loc : hscene_main->MeshFiles())
+  //{
+  //  auto meshId    = AddMeshFromFile(loc);
+  //  auto instances = hscene_main->GetAllInstancesOfMeshLoc(loc); 
+  //  for(size_t j = 0; j < instances.size(); ++j)
+  //  {
+  //    if(transpose)
+  //      InstanceMesh(meshId, LiteMath::transpose(instances[j]));
+  //    else
+  //      InstanceMesh(meshId, instances[j]);
+  //  }
+  //}
 
   for(auto cam : hscene_main->Cameras())
   {
     m_sceneCameras.push_back(cam);
   }
+
+  // Create triangulated surface with size resolution1D x resolution1D
+
+  {
+    float gap = 1.0f / (resolution1D - 1);
+    cmesh::SimpleMesh mesh = cmesh::SimpleMesh();
+
+    // now I should generate information about every vertex of plane
+    mesh.vPos4f.reserve(4 * resolution1D * resolution1D);
+    mesh.vTexCoord2f.reserve(2 * resolution1D * resolution1D);
+    mesh.vTang4f.reserve(4 * resolution1D * resolution1D);
+    mesh.vNorm4f.reserve(4 * resolution1D * resolution1D);
+
+    for (int i = 0; i < resolution1D; ++i)
+    {
+      for (int j = 0; j < resolution1D; ++j)
+      {
+        //position. (Y is 0 because I want to see horizontal plane)
+        // 0.5f is needed to make float3(0.0f) center of plane
+        addVec4(mesh.vPos4f, i * gap - 0.5f, 0, j * gap - 0.5f, 0);
+
+        //tex coord
+        addVec2(mesh.vTexCoord2f, i * gap, j * gap);
+
+        //tang - I add vec4(0)
+        addVec4(mesh.vTang4f);
+
+        // norm
+        addVec4(mesh.vNorm4f, 0, 1, 0, 0);
+      }
+    }
+
+    assert(mesh.vPos4f.size() == 4 * resolution1D * resolution1D);
+    assert(mesh.vTexCoord2f.size() == 2 * resolution1D * resolution1D);
+    assert(mesh.vTang4f.size() == 4 * resolution1D * resolution1D);
+    assert(mesh.vNorm4f.size() == 4 * resolution1D * resolution1D);
+
+    // now I need to create info about all triangles
+    // I have (resolution1D - 1) * (resolution1D - 1) squares. Every square = 2 triangles
+
+    mesh.indices.reserve(2 * 3 * (resolution1D - 1) * (resolution1D - 1));
+    for (int i = 0; i < resolution1D - 1; ++i)
+    {
+      for (int j = 0; j < resolution1D - 1; ++j)
+      {
+        addVec3(mesh.indices, j * resolution1D + i, j * resolution1D + i + 1, (j + 1) * resolution1D + i);
+        addVec3(mesh.indices, (j + 1) * resolution1D + i, j * resolution1D + i + 1, (j + 1) * resolution1D + i + 1);
+      }
+    }
+
+    assert(mesh.indices.size() == 2 * 3 * (resolution1D - 1) * (resolution1D - 1));
+
+    AddMeshFromData(mesh);
+
+    m_instanceInfos = std::vector<InstanceInfo>(1, InstanceInfo{ .renderMark = true });// other field are equal to 0 and that is normal
+    // I can clear it, because plane is the single mesh element in my scene
+
+    m_instanceMatrices.clear(); // extra line, but I wrote it to be sure that I make m_instanceMatrices and m_instanceInfos for single mesh
+    LiteMath::float4x4 meshMat = LiteMath::translate4x4(float3(0.0f)) * LiteMath::scale4x4(float3(1.0f));
+    m_instanceMatrices.push_back(meshMat);
+  }
+
+  // End of mesh creation
 
   LoadGeoDataOnGPU();
   hscene_main = nullptr;

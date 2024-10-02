@@ -45,7 +45,8 @@ void SimpleShadowmapRender::AllocateResources()
 
 void SimpleShadowmapRender::LoadScene(const char* path, bool transpose_inst_matrices)
 {
-  m_pScnMgr->LoadSceneXML(path, transpose_inst_matrices);
+  m_pScnMgr->LoadSceneAndSurface(path, resolution1D, transpose_inst_matrices);
+  pushConst2M.surfaceParams.gap = 1.0f / (resolution1D - 1);
 
   // TODO: Make a separate stage
   loadShaders();
