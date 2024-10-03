@@ -116,8 +116,8 @@ private:
       lightTargetDist = 20.0f;
       usePerspectiveM = true;
 
-      insideAngleParam = 3.1416f * 45 / 180;
-      outsideAngleParam = 3.1416f * 90 / 180;
+      insideAngleParam = 3.1416f * 22 / 180;
+      outsideAngleParam = 3.1416f * 45 / 180;
     }
 
     float  radius;           ///!< ignored when usePerspectiveM == true 
