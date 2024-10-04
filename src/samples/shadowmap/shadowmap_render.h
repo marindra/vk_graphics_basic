@@ -47,6 +47,7 @@ private:
   etna::GlobalContext* m_context;
   etna::Image mainViewDepth;
   etna::Image shadowMap;
+  etna::Image view_16;
   etna::Sampler defaultSampler;
   etna::Buffer constants;
 
@@ -77,6 +78,7 @@ private:
 
   etna::GraphicsPipeline m_basicForwardPipeline {};
   etna::GraphicsPipeline m_shadowPipeline {};
+  etna::GraphicsPipeline m_toneMappingPipeline{};
   
   VkSurfaceKHR m_surface = VK_NULL_HANDLE;
   VulkanSwapChain m_swapchain;
@@ -86,6 +88,12 @@ private:
   uint32_t m_height = 1024u;
   uint32_t m_framesInFlight = 2u;
   bool m_vsync = false;
+
+  const char *toneMappingModes[3] = {"None", "Reinhard", "Exposure"}; // Don't change the order! It's used in shader and gui!
+  int currentToneMappingMode = 0;
+
+  float exposure = 2.2f;
+  float brightness = 1.0f;
 
   vk::PhysicalDeviceFeatures m_enabledDeviceFeatures = {};
   std::vector<const char*> m_deviceExtensions;
