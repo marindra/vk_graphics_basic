@@ -100,7 +100,7 @@ float cnoise(vec2 P)
 
 float makeVerticalShift(vec2 pos)
 {
-  return cnoise(5 * pos) * (params.surfaceParams.maxHeight - params.surfaceParams.minHeight) + params.surfaceParams.maxHeight;
+  return cnoise(5 * pos) * (params.surfaceParams.maxHeight - params.surfaceParams.minHeight) + params.surfaceParams.minHeight;
 }
 
 void main(void)
